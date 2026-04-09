@@ -1,0 +1,113 @@
+-- Online Voting System Database Setup
+-- Run this SQL in phpMyAdmin or MySQL CLI
+
+CREATE DATABASE IF NOT EXISTS online_voting_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE online_voting_db;
+
+-- Users table (voters, admin, USC)
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    student_id VARCHAR(20) UNIQUE NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    course VARCHAR(100) DEFAULT '',
+    year_level INT DEFAULT 1,
+    role ENUM('voter', 'admin', 'usc') DEFAULT 'voter',
+    is_active TINYINT(1) DEFAULT 1,
+    profile_photo VARCHAR(255) DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Elections table
+CREATE TABLE IF NOT EXISTS elections (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    start_date DATETIME NOT NULL,
+    end_date DATETIME NOT NULL,
+    status ENUM('upcoming', 'active', 'ended') DEFAULT 'upcoming',
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- Positions table
+CREATE TABLE IF NOT EXISTS positions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    election_id INT NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    description TEXT,
+    max_votes INT DEFAULT 1,
+    sort_order INT DEFAULT 0,
+    FOREIGN KEY (election_id) REFERENCES elections(id) ON DELETE CASCADE
+);
+
+-- Candidates table
+CREATE TABLE IF NOT EXISTS candidates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    election_id INT NOT NULL,
+    position_id INT NOT NULL,
+    user_id INT,
+    full_name VARCHAR(100) NOT NULL,
+    student_id VARCHAR(20),
+    course VARCHAR(100),
+    year_level INT DEFAULT 1,
+    photo VARCHAR(255) DEFAULT '',
+    platform TEXT,
+    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (election_id) REFERENCES elections(id) ON DELETE CASCADE,
+    FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- Votes table
+CREATE TABLE IF NOT EXISTS votes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    election_id INT NOT NULL,
+    position_id INT NOT NULL,
+    voter_id INT NOT NULL,
+    candidate_id INT NOT NULL,
+    voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_vote (election_id, position_id, voter_id),
+    FOREIGN KEY (election_id) REFERENCES elections(id) ON DELETE CASCADE,
+    FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE,
+    FOREIGN KEY (voter_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE
+);
+
+-- Voter eligibility (which voters can vote in which elections)
+CREATE TABLE IF NOT EXISTS voter_eligibility (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    election_id INT NOT NULL,
+    voter_id INT NOT NULL,
+    has_voted TINYINT(1) DEFAULT 0,
+    voted_at TIMESTAMP NULL,
+    UNIQUE KEY unique_eligibility (election_id, voter_id),
+    FOREIGN KEY (election_id) REFERENCES elections(id) ON DELETE CASCADE,
+    FOREIGN KEY (voter_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Audit log
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    action VARCHAR(100) NOT NULL,
+    details TEXT,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- Default admin account (password: admin123)
+INSERT INTO users (student_id, full_name, email, password, role) VALUES
+('ADMIN001', 'System Administrator', 'admin@wmsu.edu.ph', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin'),
+('USC001', 'USC Chairperson', 'usc@wmsu.edu.ph', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'usc');
+
+-- Note: Default password is "password" for both admin accounts
+-- Change these immediately after setup!
+
+-- Credentials:
+-- ADMIN001	password
+-- USC001	password
