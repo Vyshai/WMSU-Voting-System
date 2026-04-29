@@ -3,6 +3,7 @@ require_once "session_config.php";
 require_once "Election.php";
 require_once "Candidate.php";
 require_once "Vote.php";
+require_once "User.php";
 
 $electionObj = new Election();
 $electionObj->updateStatuses();
@@ -26,7 +27,7 @@ $byPosition = [];
 foreach ($results as $r) {
     $byPosition[$r['position_id']][] = $r;
 }
-require_once "User.php";
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
