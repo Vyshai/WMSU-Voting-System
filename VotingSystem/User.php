@@ -4,7 +4,9 @@ require_once "database.php";
 class User extends Database
 {
     public $student_id = "";
-    public $full_name = "";
+    public $last_name = "";
+    public $first_name = "";
+    public $middle_initial = "";
     public $email = "";
     public $password = "";
     public $course = "";
@@ -13,13 +15,15 @@ class User extends Database
 
     public function register()
     {
-        $sql = "INSERT INTO users (student_id, full_name, email, password, course, year_level, role)
-                VALUES (:student_id, :full_name, :email, :password, :course, :year_level, :role)";
+        $sql = "INSERT INTO users (student_id, last_name, first_name, middle_initial, email, password, course, year_level, role)
+                VALUES (:student_id, :last_name, :first_name, :middle_initial, :email, :password, :course, :year_level, :role)";
         $query = $this->connect()->prepare($sql);
         $hashed = password_hash($this->password, PASSWORD_DEFAULT);
 
         $query->bindParam(":student_id", $this->student_id);
-        $query->bindParam(":full_name", $this->full_name);
+        $query->bindParam(":last_name", $this->last_name);
+        $query->bindParam(":first_name", $this->first_name);
+        $query->bindParam(":middle_initial", $this->middle_initial);
         $query->bindParam(":email", $this->email);
         $query->bindParam(":password", $hashed);
         $query->bindParam(":course", $this->course);
@@ -80,7 +84,7 @@ class User extends Database
     public function getAllUsers($role = '')
     {
         if ($role) {
-            $sql = "SELECT * FROM users WHERE role = :role ORDER BY full_name ASC";
+            $sql = "SELECT * FROM users WHERE role = :role ORDER BY last_name ASC, first_name ASC";
             $query = $this->connect()->prepare($sql);
             $query->bindParam(":role", $role);
         } else {
@@ -95,10 +99,12 @@ class User extends Database
 
     public function updateUser($id, $data)
     {
-        $sql = "UPDATE users SET full_name=:full_name, email=:email, course=:course, 
-                year_level=:year_level, role=:role, is_active=:is_active WHERE id=:id";
+        $sql = "UPDATE users SET last_name=:last_name, first_name=:first_name, middle_initial=:middle_initial,
+                email=:email, course=:course, year_level=:year_level, role=:role, is_active=:is_active WHERE id=:id";
         $query = $this->connect()->prepare($sql);
-        $query->bindParam(":full_name", $data['full_name']);
+        $query->bindParam(":last_name", $data['last_name']);
+        $query->bindParam(":first_name", $data['first_name']);
+        $query->bindParam(":middle_initial", $data['middle_initial']);
         $query->bindParam(":email", $data['email']);
         $query->bindParam(":course", $data['course']);
         $query->bindParam(":year_level", $data['year_level']);
