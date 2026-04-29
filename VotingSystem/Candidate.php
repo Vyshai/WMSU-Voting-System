@@ -6,7 +6,9 @@ class Candidate extends Database
     public $election_id = "";
     public $position_id = "";
     public $user_id = null;
-    public $full_name = "";
+    public $last_name = "";
+    public $first_name = "";
+    public $middle_initial = "";
     public $student_id = "";
     public $course = "";
     public $year_level = 1;
@@ -16,13 +18,15 @@ class Candidate extends Database
 
     public function addCandidate()
     {
-        $sql = "INSERT INTO candidates (election_id, position_id, user_id, full_name, student_id, course, year_level, photo, platform, status)
-                VALUES (:election_id, :position_id, :user_id, :full_name, :student_id, :course, :year_level, :photo, :platform, :status)";
+        $sql = "INSERT INTO candidates (election_id, position_id, user_id, last_name, first_name, middle_initial, student_id, course, year_level, photo, platform, status)
+                VALUES (:election_id, :position_id, :user_id, :last_name, :first_name, :middle_initial, :student_id, :course, :year_level, :photo, :platform, :status)";
         $query = $this->connect()->prepare($sql);
         $query->bindParam(":election_id", $this->election_id);
         $query->bindParam(":position_id", $this->position_id);
         $query->bindParam(":user_id", $this->user_id);
-        $query->bindParam(":full_name", $this->full_name);
+        $query->bindParam(":last_name", $this->last_name);
+        $query->bindParam(":first_name", $this->first_name);
+        $query->bindParam(":middle_initial", $this->middle_initial);
         $query->bindParam(":student_id", $this->student_id);
         $query->bindParam(":course", $this->course);
         $query->bindParam(":year_level", $this->year_level);
@@ -39,7 +43,7 @@ class Candidate extends Database
                     FROM candidates c
                     JOIN positions p ON c.position_id = p.id
                     WHERE c.election_id = :election_id AND c.status = :status
-                    ORDER BY p.sort_order ASC, c.full_name ASC";
+                    ORDER BY p.sort_order ASC, c.last_name ASC, c.first_name ASC";
             $query = $this->connect()->prepare($sql);
             $query->bindParam(":election_id", $election_id);
             $query->bindParam(":status", $status);
@@ -48,7 +52,7 @@ class Candidate extends Database
                     FROM candidates c
                     JOIN positions p ON c.position_id = p.id
                     WHERE c.election_id = :election_id
-                    ORDER BY p.sort_order ASC, c.full_name ASC";
+                    ORDER BY p.sort_order ASC, c.last_name ASC, c.first_name ASC";
             $query = $this->connect()->prepare($sql);
             $query->bindParam(":election_id", $election_id);
         }
@@ -64,7 +68,7 @@ class Candidate extends Database
                 (SELECT COUNT(*) FROM votes WHERE candidate_id = c.id) as vote_count
                 FROM candidates c
                 WHERE c.position_id = :position_id AND c.status = :status
-                ORDER BY c.full_name ASC";
+                ORDER BY c.last_name ASC, c.first_name ASC";
         $query = $this->connect()->prepare($sql);
         $query->bindParam(":position_id", $position_id);
         $query->bindParam(":status", $status);
@@ -100,10 +104,12 @@ class Candidate extends Database
 
     public function updateCandidate($id)
     {
-        $sql = "UPDATE candidates SET full_name=:full_name, course=:course, year_level=:year_level,
-                platform=:platform, position_id=:position_id WHERE id=:id";
+        $sql = "UPDATE candidates SET last_name=:last_name, first_name=:first_name, middle_initial=:middle_initial,
+                course=:course, year_level=:year_level, platform=:platform, position_id=:position_id WHERE id=:id";
         $query = $this->connect()->prepare($sql);
-        $query->bindParam(":full_name", $this->full_name);
+        $query->bindParam(":last_name", $this->last_name);
+        $query->bindParam(":first_name", $this->first_name);
+        $query->bindParam(":middle_initial", $this->middle_initial);
         $query->bindParam(":course", $this->course);
         $query->bindParam(":year_level", $this->year_level);
         $query->bindParam(":platform", $this->platform);
