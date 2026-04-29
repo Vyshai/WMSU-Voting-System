@@ -6,7 +6,7 @@ if (isset($_SESSION['user_id'])) {
 require_once "User.php";
 $userObj = new User();
 
-$data = ["student_id"=>"","full_name"=>"","email"=>"","course"=>"","year_level"=>"1","password"=>"","confirm_password"=>""];
+$data = ["student_id"=>"","last_name"=>"","first_name"=>"","middle_initial"=>"","email"=>"","course"=>"","year_level"=>"1","password"=>"","confirm_password"=>""];
 $errors = [];
 $success = "";
 
@@ -22,7 +22,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $data['confirm_password'] = $_POST['confirm_password'] ?? '';
 
     if (empty($data['student_id'])) $errors['student_id'] = "Student ID is required";
-    if (empty($data['full_name'])) $errors['full_name'] = "Full name is required";
+    if (empty($data['last_name'])) $errors['last_name'] = "Last name is required";
+    if (empty($data['first_name'])) $errors['first_name'] = "First name is required";
     if (empty($data['email'])) $errors['email'] = "Email is required";
     elseif (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) $errors['email'] = "Invalid email format";
     elseif (!str_ends_with($data['email'], '@wmsu.edu.ph')) $errors['email'] = "Must use your WMSU email (@wmsu.edu.ph)";
@@ -36,7 +37,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         elseif ($userObj->emailExists($data['email'])) $errors['email'] = "Email already registered";
         else {
             $userObj->student_id = $data['student_id'];
-            $userObj->full_name = $data['full_name'];
+            $userObj->last_name = $data['last_name'];
+            $userObj->first_name = $data['first_name'];
+            $userObj->middle_initial = $data['middle_initial'];
             $userObj->email = $data['email'];
             $userObj->course = $data['course'];
             $userObj->year_level = (int)$data['year_level'];
@@ -44,7 +47,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $userObj->role = "voter";
             if ($userObj->register()) {
                 $success = "Registration successful! You can now login with your Student ID.";
-                $data = ["student_id"=>"","full_name"=>"","email"=>"","course"=>"","year_level"=>"1","password"=>"","confirm_password"=>""];
+                $data = ["student_id"=>"","last_name"=>"","first_name"=>"","middle_initial"=>"","email"=>"","course"=>"","year_level"=>"1","password"=>"","confirm_password"=>""];
             } else {
                 $errors['general'] = "Registration failed. Please try again.";
             }
@@ -151,12 +154,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
         </div>
 
-        <div class="form-group">
-            <label>Full Name <span>*</span></label>
-            <input type="text" name="full_name" value="<?php echo $data['full_name']; ?>"
-                   placeholder="Last Name, First Name Middle Initial"
-                   class="<?php echo isset($errors['full_name']) ? 'input-error' : ''; ?>">
-            <?php if (isset($errors['full_name'])): ?><p class="field-error"><?php echo $errors['full_name']; ?></p><?php endif; ?>
+        <div class="form-row" style="grid-template-columns: 1fr 1fr 80px;">
+            <div class="form-group">
+                <label>Last Name <span>*</span></label>
+                <input type="text" name="last_name" value="<?php echo $data['last_name']; ?>"
+                       placeholder="e.g. Dela Cruz"
+                       class="<?php echo isset($errors['last_name']) ? 'input-error' : ''; ?>">
+                <?php if (isset($errors['last_name'])): ?><p class="field-error"><?php echo $errors['last_name']; ?></p><?php endif; ?>
+            </div>
+            <div class="form-group">
+                <label>First Name <span>*</span></label>
+                <input type="text" name="first_name" value="<?php echo $data['first_name']; ?>"
+                       placeholder="e.g. Juan"
+                       class="<?php echo isset($errors['first_name']) ? 'input-error' : ''; ?>">
+                <?php if (isset($errors['first_name'])): ?><p class="field-error"><?php echo $errors['first_name']; ?></p><?php endif; ?>
+            </div>
+            <div class="form-group">
+                <label>M.I.</label>
+                <input type="text" name="middle_initial" value="<?php echo $data['middle_initial']; ?>"
+                       placeholder="e.g. A." maxlength="5">
+            </div>
         </div>
 
         <div class="form-group">
