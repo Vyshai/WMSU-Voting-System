@@ -519,7 +519,7 @@ $upcoming = array_filter($all_elections, fn($e) => $e['status'] === 'upcoming');
 
 <nav>
     <a href="index.php" class="nav-brand">
-        <div class="nav-logo">W</div>
+        <div class="nav-logo"><img src="uploads/wmsu_logo.png" alt="WMSU" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></div>
         <div class="nav-title-group">
             <div class="nav-title">WMSU</div>
             <div class="nav-subtitle">Online Voting</div>
