@@ -8,7 +8,12 @@ USE online_voting_db;
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     student_id VARCHAR(20) UNIQUE NOT NULL,
-    full_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(50) NOT NULL DEFAULT '',
+    first_name VARCHAR(50) NOT NULL DEFAULT '',
+    middle_initial VARCHAR(10) NOT NULL DEFAULT '',
+    full_name VARCHAR(120) GENERATED ALWAYS AS (
+        CONCAT(last_name, ', ', first_name, IF(middle_initial != '', CONCAT(' ', middle_initial), ''))
+    ) STORED,
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     course VARCHAR(100) DEFAULT '',
@@ -49,7 +54,12 @@ CREATE TABLE IF NOT EXISTS candidates (
     election_id INT NOT NULL,
     position_id INT NOT NULL,
     user_id INT,
-    full_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(50) NOT NULL DEFAULT '',
+    first_name VARCHAR(50) NOT NULL DEFAULT '',
+    middle_initial VARCHAR(10) NOT NULL DEFAULT '',
+    full_name VARCHAR(120) GENERATED ALWAYS AS (
+        CONCAT(last_name, ', ', first_name, IF(middle_initial != '', CONCAT(' ', middle_initial), ''))
+    ) STORED,
     student_id VARCHAR(20),
     course VARCHAR(100),
     year_level INT DEFAULT 1,
@@ -62,7 +72,7 @@ CREATE TABLE IF NOT EXISTS candidates (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Votes table
+-- Votes table (supports multi-vote per position via unique on candidate)
 CREATE TABLE IF NOT EXISTS votes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     election_id INT NOT NULL,
@@ -70,7 +80,7 @@ CREATE TABLE IF NOT EXISTS votes (
     voter_id INT NOT NULL,
     candidate_id INT NOT NULL,
     voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_vote (election_id, position_id, voter_id),
+    UNIQUE KEY unique_vote_candidate (election_id, position_id, voter_id, candidate_id),
     FOREIGN KEY (election_id) REFERENCES elections(id) ON DELETE CASCADE,
     FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE,
     FOREIGN KEY (voter_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -100,14 +110,14 @@ CREATE TABLE IF NOT EXISTS audit_log (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Default admin account (password: admin123)
-INSERT INTO users (student_id, full_name, email, password, role) VALUES
-('ADMIN001', 'System Administrator', 'admin@wmsu.edu.ph', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin'),
-('USC001', 'USC Chairperson', 'usc@wmsu.edu.ph', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'usc');
+-- Default admin account (password: password)
+INSERT INTO users (student_id, last_name, first_name, email, password, role) VALUES
+('ADMIN001', 'Administrator', 'System', 'admin@wmsu.edu.ph', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin'),
+('USC001', 'Chairperson', 'USC', 'usc@wmsu.edu.ph', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'usc');
 
 -- Note: Default password is "password" for both admin accounts
 -- Change these immediately after setup!
 
--- admin Credentials:
--- E: ADMIN001	P: password
--- E: USC001	P: password
+-- Credentials:
+-- ADMIN001	password
+-- USC001	password
