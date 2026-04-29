@@ -26,16 +26,18 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['change_role'])) {
 }
 if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['add_user'])) {
     $nu = new User();
-    $nu->student_id = trim(htmlspecialchars($_POST['student_id']));
-    $nu->full_name  = trim(htmlspecialchars($_POST['full_name']));
-    $nu->email      = trim(htmlspecialchars($_POST['email']));
-    $nu->course     = trim(htmlspecialchars($_POST['course']));
-    $nu->year_level = (int)$_POST['year_level'];
-    $nu->role       = $_POST['role'];
-    $nu->password   = $_POST['password'];
+    $nu->student_id      = trim(htmlspecialchars($_POST['student_id']));
+    $nu->last_name       = trim(htmlspecialchars($_POST['last_name']));
+    $nu->first_name      = trim(htmlspecialchars($_POST['first_name']));
+    $nu->middle_initial  = trim(htmlspecialchars($_POST['middle_initial'] ?? ''));
+    $nu->email           = trim(htmlspecialchars($_POST['email']));
+    $nu->course          = trim(htmlspecialchars($_POST['course']));
+    $nu->year_level      = (int)$_POST['year_level'];
+    $nu->role            = $_POST['role'];
+    $nu->password        = $_POST['password'];
     if ($nu->studentIdExists($nu->student_id)) { $message="Student ID already registered."; $message_type="error"; }
     elseif ($nu->emailExists($nu->email)) { $message="Email already registered."; $message_type="error"; }
-    elseif ($nu->register()) { $message="User added!"; $message_type="success"; $voteObj->logAction($_SESSION['user_id'],'ADD_USER',"Added: {$nu->full_name}",$_SERVER['REMOTE_ADDR']??''); }
+    elseif ($nu->register()) { $message="User added!"; $message_type="success"; $voteObj->logAction($_SESSION['user_id'],'ADD_USER',"Added: {$nu->last_name}, {$nu->first_name}",$_SERVER['REMOTE_ADDR']??''); }
     else { $message="Failed to add user."; $message_type="error"; }
 }
 
@@ -61,7 +63,11 @@ $courses = ["BS Computer Science","BS Information Technology","BS Computer Engin
     <form method="POST">
       <input type="hidden" name="add_user" value="1">
       <div class="form-group"><label>Student ID *</label><input type="text" name="student_id" placeholder="2021-00001" required></div>
-      <div class="form-group"><label>Full Name *</label><input type="text" name="full_name" placeholder="Last, First M.I." required></div>
+      <div class="form-row">
+        <div class="form-group"><label>Last Name *</label><input type="text" name="last_name" placeholder="Dela Cruz" required></div>
+        <div class="form-group"><label>First Name *</label><input type="text" name="first_name" placeholder="Juan" required></div>
+      </div>
+      <div class="form-group"><label>M.I.</label><input type="text" name="middle_initial" placeholder="A." maxlength="5"></div>
       <div class="form-group"><label>Email *</label><input type="email" name="email" placeholder="student@wmsu.edu.ph" required></div>
       <div class="form-row">
         <div class="form-group"><label>Course</label><select name="course"><option value="">--</option><?php foreach($courses as $c): ?><option value="<?php echo $c; ?>"><?php echo $c; ?></option><?php endforeach; ?></select></div>
