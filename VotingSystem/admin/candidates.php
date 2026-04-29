@@ -23,15 +23,17 @@ if (isset($_GET['delete_cand'])) { $candidateObj->deleteCandidate((int)$_GET['de
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_candidate'])) {
     $c = new Candidate();
-    $c->election_id = $selected_election_id;
-    $c->position_id = (int)$_POST['position_id'];
-    $c->full_name   = trim(htmlspecialchars($_POST['full_name']));
-    $c->student_id  = trim(htmlspecialchars($_POST['student_id']));
-    $c->course      = trim(htmlspecialchars($_POST['course']));
-    $c->year_level  = (int)$_POST['year_level'];
-    $c->platform    = trim(htmlspecialchars($_POST['platform']));
-    $c->status      = $_POST['cand_status'] ?? 'approved';
-    $c->photo       = '';
+    $c->election_id     = $selected_election_id;
+    $c->position_id     = (int)$_POST['position_id'];
+    $c->last_name       = trim(htmlspecialchars($_POST['last_name']));
+    $c->first_name      = trim(htmlspecialchars($_POST['first_name']));
+    $c->middle_initial  = trim(htmlspecialchars($_POST['middle_initial'] ?? ''));
+    $c->student_id      = trim(htmlspecialchars($_POST['student_id']));
+    $c->course          = trim(htmlspecialchars($_POST['course']));
+    $c->year_level      = (int)$_POST['year_level'];
+    $c->platform        = trim(htmlspecialchars($_POST['platform']));
+    $c->status          = $_POST['cand_status'] ?? 'approved';
+    $c->photo           = '';
     if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
         $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
         if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) {
@@ -42,11 +44,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_candidate'])) {
             $c->photo = $fn;
         }
     }
-    if (empty($c->full_name) || !$c->position_id) {
+    if (empty($c->last_name) || empty($c->first_name) || !$c->position_id) {
         $message = "Name and position required."; $message_type = "error";
     } elseif ($c->addCandidate()) {
         $message = "Candidate added!"; $message_type = "success";
-        $voteObj->logAction($_SESSION['user_id'], 'ADD_CANDIDATE', "Added: {$c->full_name}", $_SERVER['REMOTE_ADDR'] ?? '');
+        $voteObj->logAction($_SESSION['user_id'], 'ADD_CANDIDATE', "Added: {$c->last_name}, {$c->first_name}", $_SERVER['REMOTE_ADDR'] ?? '');
     } else { $message = "Failed to add."; $message_type = "error"; }
 }
 
@@ -80,7 +82,11 @@ $courses = ["BS Computer Science","BS Information Technology","BS Computer Engin
     <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="add_candidate" value="1">
       <div class="form-group"><label>Position *</label><select name="position_id" required><option value="">-- Select Position --</option><?php foreach ($positions as $pos): ?><option value="<?php echo $pos['id']; ?>"><?php echo htmlspecialchars($pos['title']); ?></option><?php endforeach; ?></select></div>
-      <div class="form-group"><label>Full Name *</label><input type="text" name="full_name" placeholder="Last Name, First Name M.I." required></div>
+      <div class="form-row">
+        <div class="form-group"><label>Last Name *</label><input type="text" name="last_name" placeholder="Dela Cruz" required></div>
+        <div class="form-group"><label>First Name *</label><input type="text" name="first_name" placeholder="Juan" required></div>
+      </div>
+      <div class="form-group"><label>M.I.</label><input type="text" name="middle_initial" placeholder="A." maxlength="5"></div>
       <div class="form-row">
         <div class="form-group"><label>Student ID</label><input type="text" name="student_id" placeholder="2021-00001"></div>
         <div class="form-group"><label>Year Level</label><select name="year_level"><?php for($i=1;$i<=5;$i++): ?><option value="<?php echo $i; ?>">Year <?php echo $i; ?></option><?php endfor; ?></select></div>
