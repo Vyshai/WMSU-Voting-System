@@ -23,10 +23,14 @@ if (!$election || $election['status'] !== 'active') {
 $positions = $electionObj->getPositions($election_id);
 $voter_id = $_SESSION['user_id'];
 
-// Get voter's already cast votes
+// Get voter's already cast votes per position
 $votedPositions = [];
+$votedCounts = [];
 foreach ($positions as $pos) {
-    if ($electionObj->hasVoterVotedInPosition($voter_id, $election_id, $pos['id'])) {
+    $count = $voteObj->getVoterVoteCountForPosition($voter_id, $election_id, $pos['id']);
+    $votedCounts[$pos['id']] = $count;
+    $maxVotes = (int)$pos['max_votes'];
+    if ($count >= $maxVotes) {
         $votedPositions[$pos['id']] = true;
     }
 }
@@ -34,42 +38,50 @@ foreach ($positions as $pos) {
 $errors = [];
 $success = false;
 
-// Handle vote submission
+// Handle vote submission — supports multi-vote
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $submittedVotes = $_POST['votes'] ?? [];
     $newVotes = 0;
 
     foreach ($positions as $pos) {
-        // Skip already voted positions
         if (isset($votedPositions[$pos['id']])) continue;
+        $maxVotes = (int)$pos['max_votes'];
 
         if (isset($submittedVotes[$pos['id']])) {
-            $candidate_id = (int)$submittedVotes[$pos['id']];
-            // Validate candidate belongs to this position
-            $candidates = $candidateObj->getCandidatesByPosition($pos['id']);
-            $valid = false;
-            foreach ($candidates as $c) {
-                if ($c['id'] === $candidate_id) { $valid = true; break; }
-            }
-            if (!$valid) {
-                $errors[] = "Invalid candidate selected for " . htmlspecialchars($pos['title']);
+            $selectedIds = $submittedVotes[$pos['id']];
+            // Normalize: if single vote (radio), wrap in array
+            if (!is_array($selectedIds)) $selectedIds = [$selectedIds];
+
+            // Validate count
+            $remaining = $maxVotes - $votedCounts[$pos['id']];
+            if (count($selectedIds) > $remaining) {
+                $errors[] = "Too many candidates selected for " . htmlspecialchars($pos['title']) . " (max $maxVotes)";
                 continue;
             }
-            if ($voteObj->castVote($election_id, $pos['id'], $voter_id, $candidate_id)) {
-                $newVotes++;
-            } else {
-                $errors[] = "Failed to cast vote for " . htmlspecialchars($pos['title']);
+
+            // Validate each candidate and cast vote
+            $candidates = $candidateObj->getCandidatesByPosition($pos['id']);
+            $validIds = array_column($candidates, 'id');
+            foreach ($selectedIds as $cid) {
+                $cid = (int)$cid;
+                if (!in_array($cid, $validIds)) {
+                    $errors[] = "Invalid candidate for " . htmlspecialchars($pos['title']);
+                    continue;
+                }
+                if ($voteObj->castVote($election_id, $pos['id'], $voter_id, $cid)) {
+                    $newVotes++;
+                }
             }
-        } else {
-            // Abstain — skip (allow abstaining)
         }
     }
 
     if (empty($errors) && $newVotes > 0) {
-        $voteObj->logAction($voter_id, 'VOTE_CAST', "Voted in election #$election_id, $newVotes position(s)", $_SERVER['REMOTE_ADDR'] ?? '');
+        $voteObj->logAction($voter_id, 'VOTE_CAST', "Voted in election #$election_id, $newVotes vote(s)", $_SERVER['REMOTE_ADDR'] ?? '');
         // Refresh voted positions
         foreach ($positions as $pos) {
-            if ($electionObj->hasVoterVotedInPosition($voter_id, $election_id, $pos['id'])) {
+            $count = $voteObj->getVoterVoteCountForPosition($voter_id, $election_id, $pos['id']);
+            $votedCounts[$pos['id']] = $count;
+            if ($count >= (int)$pos['max_votes']) {
                 $votedPositions[$pos['id']] = true;
             }
         }
@@ -89,11 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #7B1113; --primary-dark: #5a0c0e; --gold: #D4A843; --gold-dark: #b8912a; --light: #f7f3ef; }
         body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; background: var(--light); color: #2d3748; }
-        header {
-            background: var(--primary); color: white; padding: 0 40px; height: 64px;
-            display: flex; justify-content: space-between; align-items: center;
-            position: sticky; top: 0; z-index: 10;
-        }
+        header { background: var(--primary); color: white; padding: 0 40px; height: 64px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
         .header-brand { display: flex; align-items: center; gap: 10px; }
         .header-logo { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; border: 2px solid var(--gold); }
         .header-logo img { width: 100%; height: 100%; object-fit: cover; }
@@ -102,95 +110,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header a { color: rgba(255,255,255,0.8); font-size: 13px; text-decoration: none; font-weight: 500; }
         header a:hover { color: white; }
         .container { max-width: 820px; margin: 40px auto; padding: 0 20px 60px; }
-        .ballot-header {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white; border-radius: 16px; padding: 30px; margin-bottom: 30px;
-            text-align: center;
-        }
+        .ballot-header { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; border-radius: 16px; padding: 30px; margin-bottom: 30px; text-align: center; }
         .ballot-header h2 { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
         .ballot-header p { opacity: 0.8; font-size: 14px; }
         .ballot-header .deadline { margin-top: 12px; font-size: 13px; background: rgba(255,255,255,0.15); display: inline-flex; align-items: center; gap: 6px; padding: 5px 15px; border-radius: 20px; }
         .ballot-header .deadline svg { width: 14px; height: 14px; fill: white; }
-        .success-banner {
-            background: #c6f6d5; border: 1px solid #9ae6b4; border-radius: 12px;
-            padding: 20px; text-align: center; margin-bottom: 25px; color: #276749;
-        }
+        .success-banner { background: #c6f6d5; border: 1px solid #9ae6b4; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 25px; color: #276749; }
         .success-banner h3 { font-size: 20px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .success-banner h3 svg { width: 22px; height: 22px; fill: #276749; }
         .error-box { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; border-radius: 10px; padding: 14px; margin-bottom: 20px; }
         .error-box svg { width: 16px; height: 16px; fill: #c53030; vertical-align: middle; margin-right: 4px; }
-        .position-card {
-            background: white; border-radius: 14px; margin-bottom: 25px;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.06); overflow: hidden;
-            border: 2px solid transparent; transition: border 0.3s;
-        }
+        .position-card { background: white; border-radius: 14px; margin-bottom: 25px; box-shadow: 0 2px 15px rgba(0,0,0,0.06); overflow: hidden; border: 2px solid transparent; transition: border 0.3s; }
         .position-card.has-voted { border-color: #9ae6b4; }
-        .position-header {
-            background: var(--primary); color: white; padding: 16px 22px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
+        .position-header { background: var(--primary); color: white; padding: 16px 22px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
         .position-header h3 { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
         .position-header h3 svg { width: 18px; height: 18px; fill: white; }
+        .max-votes-badge { background: var(--gold); color: var(--primary-dark); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 12px; }
+        .selection-counter { font-size: 12px; color: rgba(255,255,255,0.8); }
         .voted-indicator { background: #48bb78; color: white; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 15px; display: flex; align-items: center; gap: 4px; }
         .voted-indicator svg { width: 14px; height: 14px; fill: white; }
         .candidates-list { padding: 15px; display: grid; gap: 10px; }
-        .candidate-option {
-            display: flex; align-items: center; gap: 15px;
-            padding: 14px 18px; border: 2px solid #e2e8f0; border-radius: 10px;
-            cursor: pointer; transition: all 0.2s; position: relative;
-        }
+        .candidate-option { display: flex; align-items: center; gap: 15px; padding: 14px 18px; border: 2px solid #e2e8f0; border-radius: 10px; cursor: pointer; transition: all 0.2s; position: relative; }
         .candidate-option:hover { border-color: var(--primary); background: #fdf5f5; }
-        .candidate-option input[type="radio"] { position: absolute; opacity: 0; }
+        .candidate-option input[type="radio"], .candidate-option input[type="checkbox"] { position: absolute; opacity: 0; }
         .candidate-option.selected { border-color: var(--gold); background: #fffbeb; }
-        .candidate-photo {
-            width: 52px; height: 52px; border-radius: 50%; background: var(--primary);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 22px; font-weight: 800; color: white; flex-shrink: 0; overflow: hidden;
-        }
+        .candidate-option.disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+        .candidate-photo { width: 52px; height: 52px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; color: white; flex-shrink: 0; overflow: hidden; }
         .candidate-photo img { width: 100%; height: 100%; object-fit: cover; }
         .candidate-info { flex: 1; }
         .candidate-info h4 { font-size: 16px; font-weight: 700; color: #2d3748; }
         .candidate-info p { font-size: 13px; color: #718096; margin-top: 2px; }
         .candidate-platform { font-size: 12px; color: #a0aec0; margin-top: 4px; font-style: italic; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .radio-circle {
-            width: 22px; height: 22px; border-radius: 50%; border: 2px solid #cbd5e0;
-            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-        }
-        .radio-circle.checked { border-color: var(--gold); background: var(--gold); }
-        .radio-circle.checked::after { content: '\2713'; color: white; font-size: 13px; font-weight: 700; }
+        .check-circle { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #cbd5e0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
+        .check-circle.checked { border-color: var(--gold); background: var(--gold); }
+        .check-circle.checked::after { content: '\2713'; color: white; font-size: 13px; font-weight: 700; }
+        .check-square { width: 22px; height: 22px; border-radius: 5px; border: 2px solid #cbd5e0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
+        .check-square.checked { border-color: var(--gold); background: var(--gold); }
+        .check-square.checked::after { content: '\2713'; color: white; font-size: 13px; font-weight: 700; }
         .no-candidates { text-align: center; padding: 30px; color: #a0aec0; }
         .abstain-note { font-size: 12px; color: #a0aec0; padding: 10px 15px; border-top: 1px solid #f0f0f0; display: flex; align-items: center; gap: 6px; }
         .abstain-note svg { width: 14px; height: 14px; fill: var(--gold-dark); flex-shrink: 0; }
-        .sticky-footer {
-            position: fixed; bottom: 0; left: 0; right: 0;
-            background: white; padding: 15px 40px; border-top: 1px solid #e2e8f0;
-            display: flex; justify-content: space-between; align-items: center;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
-        }
+        .sticky-footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px 40px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); }
         .progress-info { font-size: 14px; color: #718096; }
         .progress-info strong { color: var(--primary); }
-        .btn-submit {
-            padding: 14px 35px; background: var(--gold); color: var(--primary-dark);
-            border: none; border-radius: 9px; font-size: 16px; font-weight: 700;
-            cursor: pointer; transition: all 0.3s; font-family: 'Inter', sans-serif;
-        }
+        .btn-submit { padding: 14px 35px; background: var(--gold); color: var(--primary-dark); border: none; border-radius: 9px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s; font-family: 'Inter', sans-serif; }
         .btn-submit:hover { background: var(--gold-dark); transform: translateY(-1px); }
-        .btn-submit:disabled { background: #cbd5e0; cursor: not-allowed; transform: none; color: #718096; }
         .btn-back { padding: 12px 25px; border: 2px solid var(--primary); color: var(--primary); background: none; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; font-family: 'Inter', sans-serif; }
         .alert-info { background: #fff8ee; border-left: 4px solid var(--gold); padding: 14px 18px; border-radius: 6px; margin-bottom: 20px; font-size: 14px; color: #7b6930; display: flex; align-items: center; gap: 8px; }
         .alert-info svg { width: 18px; height: 18px; fill: var(--gold-dark); flex-shrink: 0; }
-        .voted-card { padding: 14px 20px; background: #f0fff4; border-radius: 10px; display: flex; align-items: center; gap: 12px; color: #276749; font-weight: 600; font-size: 15px; }
-        .voted-card svg { width: 18px; height: 18px; fill: #276749; flex-shrink: 0; }
+        .voted-card { padding: 14px 20px; background: #f0fff4; border-radius: 10px; color: #276749; font-weight: 600; font-size: 14px; }
+        .voted-card svg { width: 16px; height: 16px; fill: #276749; flex-shrink: 0; vertical-align: middle; margin-right: 4px; }
+        .voted-card ul { list-style: none; margin-top: 8px; }
+        .voted-card ul li { padding: 3px 0; font-weight: 500; }
+        .voted-card ul li::before { content: '\2713'; color: #276749; font-weight: 700; margin-right: 6px; }
     </style>
 </head>
 <body>
 <header>
     <div class="header-brand">
         <div class="header-logo"><img src="../uploads/wmsu_logo.png" alt="WMSU"></div>
-        <div>
-            <h1>Official Ballot</h1>
-            <p><?php echo htmlspecialchars($election['title']); ?></p>
-        </div>
+        <div><h1>Official Ballot</h1><p><?php echo htmlspecialchars($election['title']); ?></p></div>
     </div>
     <a href="dashboard.php">Back to Dashboard</a>
 </header>
@@ -218,42 +197,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <div class="alert-info">
         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-        Select one candidate per position. You may abstain from a position by leaving it unselected. Your vote is final once submitted.
+        Select your candidates for each position. Some positions allow multiple votes. Your vote is final once submitted.
     </div>
 
     <form method="POST" id="ballotForm">
         <?php foreach ($positions as $pos): ?>
             <?php
             $candidates = $candidateObj->getCandidatesByPosition($pos['id']);
+            $maxVotes = (int)$pos['max_votes'];
+            $isMulti = $maxVotes > 1;
             $alreadyVoted = isset($votedPositions[$pos['id']]);
-            $votedHistory = $alreadyVoted ? $voteObj->getVoterHistory($voter_id, $election_id) : [];
-            $votedCandidateName = '';
+            $votedHistory = $voteObj->getVoterHistory($voter_id, $election_id);
+            $votedNames = [];
             foreach ($votedHistory as $vh) {
-                if ($vh['position_id'] == $pos['id']) { $votedCandidateName = $vh['candidate_name']; break; }
+                if ($vh['position_id'] == $pos['id']) $votedNames[] = $vh['candidate_name'];
             }
             ?>
             <div class="position-card <?php echo $alreadyVoted ? 'has-voted' : ''; ?>">
                 <div class="position-header">
-                    <h3><svg viewBox="0 0 24 24"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg> <?php echo htmlspecialchars($pos['title']); ?></h3>
-                    <?php if ($alreadyVoted): ?>
-                        <span class="voted-indicator"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Voted</span>
-                    <?php endif; ?>
+                    <h3><svg viewBox="0 0 24 24"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg> <?php echo htmlspecialchars($pos['title']); ?>
+                        <?php if ($isMulti): ?><span class="max-votes-badge">Vote up to <?php echo $maxVotes; ?></span><?php endif; ?>
+                    </h3>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <?php if (!$alreadyVoted && $isMulti): ?>
+                            <span class="selection-counter" id="counter-<?php echo $pos['id']; ?>">0 / <?php echo $maxVotes; ?> selected</span>
+                        <?php endif; ?>
+                        <?php if ($alreadyVoted): ?>
+                            <span class="voted-indicator"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Voted</span>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <?php if ($alreadyVoted): ?>
                     <div class="voted-card">
-                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> You voted for: <strong><?php echo htmlspecialchars($votedCandidateName); ?></strong>
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> You voted for:
+                        <ul><?php foreach ($votedNames as $vn): ?><li><?php echo htmlspecialchars($vn); ?></li><?php endforeach; ?></ul>
                     </div>
                 <?php elseif (count($candidates) > 0): ?>
                     <div class="candidates-list">
                         <?php foreach ($candidates as $c): ?>
-                            <label class="candidate-option" onclick="selectCandidate(this, <?php echo $pos['id']; ?>)">
-                                <input type="radio" name="votes[<?php echo $pos['id']; ?>]" value="<?php echo $c['id']; ?>">
+                            <?php
+                            $inputType = $isMulti ? 'checkbox' : 'radio';
+                            $inputName = $isMulti ? "votes[{$pos['id']}][]" : "votes[{$pos['id']}]";
+                            $circleClass = $isMulti ? 'check-square' : 'check-circle';
+                            ?>
+                            <label class="candidate-option" data-pos="<?php echo $pos['id']; ?>" data-max="<?php echo $maxVotes; ?>">
+                                <input type="<?php echo $inputType; ?>" name="<?php echo $inputName; ?>" value="<?php echo $c['id']; ?>">
                                 <div class="candidate-photo">
                                     <?php if ($c['photo']): ?>
                                         <img src="../uploads/<?php echo htmlspecialchars($c['photo']); ?>" alt="">
                                     <?php else: ?>
-                                        <?php echo strtoupper(substr($c['full_name'], 0, 1)); ?>
+                                        <?php echo strtoupper(substr($c['last_name'] ?? $c['full_name'], 0, 1)); ?>
                                     <?php endif; ?>
                                 </div>
                                 <div class="candidate-info">
@@ -263,11 +257,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         <div class="candidate-platform">"<?php echo htmlspecialchars($c['platform']); ?>"</div>
                                     <?php endif; ?>
                                 </div>
-                                <div class="radio-circle" id="radio-<?php echo $pos['id']; ?>-<?php echo $c['id']; ?>"></div>
+                                <div class="<?php echo $circleClass; ?>" id="chk-<?php echo $pos['id']; ?>-<?php echo $c['id']; ?>"></div>
                             </label>
                         <?php endforeach; ?>
                     </div>
-                    <div class="abstain-note"><svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg> Leave unselected to abstain from this position.</div>
+                    <div class="abstain-note"><svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg> Leave unselected to abstain.<?php if ($isMulti): ?> You can select up to <?php echo $maxVotes; ?> candidates.<?php endif; ?></div>
                 <?php else: ?>
                     <div class="no-candidates">No approved candidates for this position.</div>
                 <?php endif; ?>
@@ -304,23 +298,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <script>
-function selectCandidate(el, posId) {
-    // Deselect all in this position
-    document.querySelectorAll(`input[name="votes[${posId}]"]`).forEach(input => {
-        input.closest('.candidate-option').classList.remove('selected');
+document.querySelectorAll('.candidate-option').forEach(el => {
+    el.addEventListener('click', function(e) {
+        e.preventDefault();
+        const input = this.querySelector('input');
+        const posId = this.dataset.pos;
+        const maxVotes = parseInt(this.dataset.max);
         const candId = input.value;
-        const circle = document.getElementById(`radio-${posId}-${candId}`);
-        if (circle) { circle.classList.remove('checked'); }
-    });
-    // Select clicked
-    el.classList.add('selected');
-    const input = el.querySelector('input[type="radio"]');
-    input.checked = true;
-    const circle = document.getElementById(`radio-${posId}-${input.value}`);
-    if (circle) circle.classList.add('checked');
-}
+        const isCheckbox = input.type === 'checkbox';
 
-// Confirm before submit
+        if (isCheckbox) {
+            // Multi-vote: toggle checkbox
+            const checked = input.checked;
+            if (!checked) {
+                // Check how many are already selected
+                const currentCount = document.querySelectorAll(`label[data-pos="${posId}"] input:checked`).length;
+                if (currentCount >= maxVotes) return; // At limit
+            }
+            input.checked = !input.checked;
+            this.classList.toggle('selected', input.checked);
+            const circle = document.getElementById(`chk-${posId}-${candId}`);
+            if (circle) circle.classList.toggle('checked', input.checked);
+
+            // Update counter
+            const newCount = document.querySelectorAll(`label[data-pos="${posId}"] input:checked`).length;
+            const counter = document.getElementById(`counter-${posId}`);
+            if (counter) counter.textContent = `${newCount} / ${maxVotes} selected`;
+
+            // Disable/enable unchecked options at limit
+            document.querySelectorAll(`label[data-pos="${posId}"]`).forEach(lbl => {
+                const inp = lbl.querySelector('input');
+                if (!inp.checked && newCount >= maxVotes) {
+                    lbl.classList.add('disabled');
+                } else {
+                    lbl.classList.remove('disabled');
+                }
+            });
+        } else {
+            // Single vote: radio behavior
+            document.querySelectorAll(`label[data-pos="${posId}"]`).forEach(lbl => {
+                lbl.classList.remove('selected');
+                const c = lbl.querySelector('.check-circle');
+                if (c) c.classList.remove('checked');
+                lbl.querySelector('input').checked = false;
+            });
+            input.checked = true;
+            this.classList.add('selected');
+            const circle = document.getElementById(`chk-${posId}-${candId}`);
+            if (circle) circle.classList.add('checked');
+        }
+    });
+});
+
 document.getElementById('ballotForm').addEventListener('submit', function(e) {
     if (!confirm('Are you sure you want to submit your ballot? This action cannot be undone.')) {
         e.preventDefault();
