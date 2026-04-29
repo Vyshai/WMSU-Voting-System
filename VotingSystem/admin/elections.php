@@ -180,10 +180,8 @@ $allElections = $electionObj->getAllElections();
                             </div>
                             <div class="form-group">
                                 <label>Max Votes Per Voter</label>
-                                <select name="max_votes">
-                                    <option value="1">1 (Single choice)</option>
-                                    <option value="2">2</option><option value="3">3</option>
-                                </select>
+                                <input type="number" name="max_votes" value="1" min="1" max="24" style="width:100%;">
+                                <p style="font-size:11px;color:#a0aec0;margin-top:4px;">Set to 1 for single-choice (e.g. President). Set higher for multi-vote (e.g. 12 for Senators).</p>
                             </div>
                             <button type="submit" name="add_position" class="btn btn-gold">Add Position</button>
                         </form>
